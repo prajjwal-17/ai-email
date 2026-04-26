@@ -70,6 +70,10 @@ function App() {
     setError('')
   }
 
+  const handleSentryTest = () => {
+    throw new Error('Frontend Sentry test')
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     setError('')
@@ -263,7 +267,12 @@ function App() {
       </main>
 
       <footer className="site-footer">
-        <div className="container">Powered by your Hugging Face model and a local Node API bridge.</div>
+        <div className="container">
+          Powered by your Hugging Face model and a local Node API bridge.
+          <button type="button" className="btn btn-secondary" onClick={handleSentryTest}>
+            Test Sentry
+          </button>
+        </div>
       </footer>
     </div>
   )
