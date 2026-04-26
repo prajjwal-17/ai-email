@@ -1,3 +1,5 @@
+import './instrument.js'
+import * as Sentry from '@sentry/node'
 import http from 'node:http'
 import fs from 'node:fs'
 import { URL } from 'node:url'
@@ -10,6 +12,16 @@ const spaceId = process.env.HUGGING_FACE_SPACE_ID
 const apiToken = process.env.HUGGING_FACE_API_TOKEN || ''
 const serviceName = 'phishguard-backend'
 let cachedClientPromise = null
+
+function captureError(error, context = {}) {
+  Sentry.withScope((scope) => {
+    for (const [key, value] of Object.entries(context)) {
+      scope.setExtra(key, value)
+    }
+
+    Sentry.captureException(error)
+  })
+}
 
 function loadEnvFile() {
   const envPath = new URL('./.env', import.meta.url)
@@ -147,6 +159,7 @@ async function getGradioClient() {
         )
       }
 
+      captureError(error, { scope: 'getGradioClient', spaceId })
       throw error
     })
   }
@@ -166,74 +179,104 @@ async function analyzeWithHuggingFace(email) {
 }
 
 const server = http.createServer(async (request, response) => {
-  if (!request.url) {
-    sendJson(response, 400, { error: 'Invalid request URL.' })
-    return
-  }
+  try {
+    if (!request.url) {
+      sendJson(response, 400, { error: 'Invalid request URL.' })
+      return
+    }
 
-  if (request.method === 'OPTIONS') {
-    response.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-    })
-    response.end()
-    return
-  }
+    if (request.method === 'OPTIONS') {
+      response.writeHead(204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+      })
+      response.end()
+      return
+    }
 
-  const requestUrl = new URL(request.url, `http://${request.headers.host}`)
+    const requestUrl = new URL(request.url, `http://${request.headers.host}`)
 
-  if (request.method === 'GET' && (requestUrl.pathname === '/api/health' || requestUrl.pathname === '/health')) {
-    sendJson(response, 200, buildHealthPayload())
-    return
-  }
+    if (request.method === 'GET' && (requestUrl.pathname === '/api/health' || requestUrl.pathname === '/health')) {
+      sendJson(response, 200, buildHealthPayload())
+      return
+    }
 
-  if (request.method === 'POST' && requestUrl.pathname === '/api/analyze') {
-    let body = ''
+    if (request.method === 'POST' && requestUrl.pathname === '/api/analyze') {
+      let body = ''
 
-    request.on('data', (chunk) => {
-      body += chunk
-      if (body.length > 1_000_000) {
-        request.destroy()
-      }
-    })
+      request.on('data', (chunk) => {
+        body += chunk
+        if (body.length > 1_000_000) {
+          request.destroy()
+        }
+      })
 
-    request.on('end', async () => {
-      const payload = safeJsonParse(body)
-      if (!payload || typeof payload !== 'object') {
-        sendJson(response, 400, { error: 'Request body must be valid JSON.' })
-        return
-      }
+      request.on('end', async () => {
+        const payload = safeJsonParse(body)
+        if (!payload || typeof payload !== 'object') {
+          sendJson(response, 400, { error: 'Request body must be valid JSON.' })
+          return
+        }
 
-      const email = {
-        sender: String(payload.sender || '').trim(),
-        subject: String(payload.subject || '').trim(),
-        body: String(payload.body || '').trim(),
-      }
+        const email = {
+          sender: String(payload.sender || '').trim(),
+          subject: String(payload.subject || '').trim(),
+          body: String(payload.body || '').trim(),
+        }
 
-      if (!email.body) {
-        sendJson(response, 400, { error: 'Email body is required for analysis.' })
-        return
-      }
+        if (!email.body) {
+          sendJson(response, 400, { error: 'Email body is required for analysis.' })
+          return
+        }
 
-      try {
-        const result = await analyzeWithHuggingFace(email)
-        sendJson(response, 200, result)
-      } catch (error) {
-        sendJson(response, 500, {
-          error: error instanceof Error ? error.message : 'Failed to analyze the email.',
+        try {
+          const result = await analyzeWithHuggingFace(email)
+          sendJson(response, 200, result)
+        } catch (error) {
+          captureError(error, {
+            route: '/api/analyze',
+            method: request.method,
+            sender: email.sender,
+            subject: email.subject,
+          })
+          sendJson(response, 500, {
+            error: error instanceof Error ? error.message : 'Failed to analyze the email.',
+          })
+        }
+      })
+
+      request.on('error', (error) => {
+        captureError(error, {
+          route: '/api/analyze',
+          method: request.method,
+          phase: 'request-stream',
         })
-      }
-    })
+        sendJson(response, 500, { error: 'Failed to read the incoming request body.' })
+      })
 
-    request.on('error', () => {
-      sendJson(response, 500, { error: 'Failed to read the incoming request body.' })
-    })
+      return
+    }
 
-    return
+    sendJson(response, 404, { error: 'Route not found.' })
+  } catch (error) {
+    captureError(error, {
+      route: request.url,
+      method: request.method,
+      phase: 'top-level-request-handler',
+    })
+    sendJson(response, 500, { error: 'Unexpected server error.' })
   }
+})
 
-  sendJson(response, 404, { error: 'Route not found.' })
+process.on('unhandledRejection', (reason) => {
+  captureError(reason instanceof Error ? reason : new Error(String(reason)), {
+    phase: 'unhandledRejection',
+  })
+})
+
+process.on('uncaughtException', (error) => {
+  captureError(error, { phase: 'uncaughtException' })
 })
 
 server.listen(port, () => {
