@@ -23,6 +23,25 @@ PhishGuard is a React frontend plus a local Node backend for phishing email anal
 
 During development, Vite proxies `/api/*` requests to `http://localhost:8787`, so the React app can call the backend without changing the fetch path in the UI code.
 
+## Health check
+
+For uptime monitoring or a Render keep-alive cron job, ping either of these backend routes:
+
+- `GET /health`
+- `GET /api/health`
+
+Example response:
+
+```json
+{
+  "ok": true,
+  "service": "phishguard-backend",
+  "status": "healthy",
+  "timestamp": "2026-04-27T00:00:00.000Z",
+  "uptime_seconds": 123
+}
+```
+
 ## Documentation
 
 - [Testing and Validation Results](docs/testing-validation.md)

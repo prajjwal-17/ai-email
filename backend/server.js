@@ -6,8 +6,9 @@ import { Client } from '@gradio/client'
 loadEnvFile()
 
 const port = Number(process.env.PORT || 8787)
-const spaceId = process.env.HUGGING_FACE_SPACE_ID || 'prajjwal1711/email-phishing-detector'
+const spaceId = process.env.HUGGING_FACE_SPACE_ID 
 const apiToken = process.env.HUGGING_FACE_API_TOKEN || ''
+const serviceName = 'phishguard-backend'
 let cachedClientPromise = null
 
 function loadEnvFile() {
@@ -45,6 +46,16 @@ function sendJson(response, statusCode, payload) {
     'Access-Control-Allow-Headers': 'Content-Type,Authorization',
   })
   response.end(JSON.stringify(payload))
+}
+
+function buildHealthPayload() {
+  return {
+    ok: true,
+    service: serviceName,
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime_seconds: Math.floor(process.uptime()),
+  }
 }
 
 function safeJsonParse(value) {
@@ -172,8 +183,8 @@ const server = http.createServer(async (request, response) => {
 
   const requestUrl = new URL(request.url, `http://${request.headers.host}`)
 
-  if (request.method === 'GET' && requestUrl.pathname === '/api/health') {
-    sendJson(response, 200, { ok: true, service: 'phishguard-backend' })
+  if (request.method === 'GET' && (requestUrl.pathname === '/api/health' || requestUrl.pathname === '/health')) {
+    sendJson(response, 200, buildHealthPayload())
     return
   }
 
