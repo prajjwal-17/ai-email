@@ -47,10 +47,14 @@ https://your-backend-service.onrender.com/health
 ## Frontend setup
 
 1. Open `frontend/`.
-2. Run `npm install` if dependencies are not already installed.
-3. Start the frontend with `npm run dev`.
+2. Copy `frontend/.env.example` to `frontend/.env`.
+3. Set `VITE_API_BASE_URL`:
+   - Use `http://localhost:8787` for local development
+   - Use your deployed backend URL on Render for production builds, for example `https://your-backend-service.onrender.com`
+4. Run `npm install` if dependencies are not already installed.
+5. Start the frontend with `npm run dev`.
 
-During development, Vite proxies `/api/*` requests to `http://localhost:8787`, so the React app can call the backend without changing the fetch path in the UI code.
+During development, Vite can still proxy `/api/*` requests to `http://localhost:8787`. If `VITE_API_BASE_URL` is set, the frontend will call that backend directly.
 
 ## Health check
 

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import './App.css'
 
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '')
+
 const initialForm = {
   sender: '',
   subject: '',
@@ -47,6 +49,10 @@ function normalizeResult(payload) {
   }
 }
 
+function buildApiUrl(path) {
+  return apiBaseUrl ? `${apiBaseUrl}${path}` : path
+}
+
 function App() {
   const [form, setForm] = useState(initialForm)
   const [result, setResult] = useState(null)
@@ -77,7 +83,7 @@ function App() {
     setIsLoading(true)
 
     try {
-      const response = await fetch('/api/analyze', {
+      const response = await fetch(buildApiUrl('/api/analyze'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -249,7 +255,7 @@ function App() {
             ) : (
               <div className="empty-state">
                 <p>Results will appear here after you submit an email.</p>
-                <span>The backend is wired to your Hugging Face model through the `/api/analyze` route.</span>
+                <span>The backend is wired through the configured API base URL and the `/api/analyze` route.</span>
               </div>
             )}
           </section>
