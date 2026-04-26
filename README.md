@@ -15,6 +15,35 @@ PhishGuard is a React frontend plus a local Node backend for phishing email anal
 4. Run `npm install` inside `backend/`.
 5. Start the backend from `backend/` with `npm run start` or `npm run dev`.
 
+## Backend deployment on Render
+
+Create a new `Web Service` in Render and point it at this repo.
+
+Use these settings:
+
+- Root Directory: `backend`
+- Environment: `Node`
+- Build Command: `npm install`
+- Start Command: `npm start`
+
+Add these environment variables in Render:
+
+- `HUGGING_FACE_SPACE_ID`
+- `HUGGING_FACE_API_TOKEN`
+
+Notes:
+
+- Render will automatically inject `PORT`, and this backend already reads `process.env.PORT`.
+- Use the health check path `/health` or `/api/health`.
+- If your Hugging Face Space is public, `HUGGING_FACE_API_TOKEN` can stay empty.
+- Your keep-alive cron job should ping the backend service URL, not the frontend URL.
+
+Example backend URL:
+
+```text
+https://your-backend-service.onrender.com/health
+```
+
 ## Frontend setup
 
 1. Open `frontend/`.
@@ -41,6 +70,8 @@ Example response:
   "uptime_seconds": 123
 }
 ```
+
+If you want Render to auto-detect the backend service from the repo, you can also use the included [render.yaml](render.yaml).
 
 ## Documentation
 
